@@ -1,5 +1,18 @@
-ESSH_FUNCTIONS="essh bin2int int2bin sshrm ts ts2 injection"
-ESSH_ALIASES="chn gtree srsync wget openports"
+#!/bin/bash
+
+# Declare the following two variables before executing essh to let it know what
+# to transfer to the remote machine
+
+#
+# List all the functions that you want to inject on the remote system.
+# essh is usually desireble to be able to hop arround and have your functions with you.
+#
+# ESSH_FUNCTIONS="essh bin2int int2bin sshrm ts ts2 injection"
+
+#
+# List the aliases to inject.
+#
+# ESSH_ALIASES="chn gtree srsync wget openports"
 
 injection () {
 	local injection n=$'\n'
