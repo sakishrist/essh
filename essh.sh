@@ -25,6 +25,15 @@ injection () {
 		aliases="$(alias $ESSH_ALIASES | sed 's/\$/\\$/g;s/"/\\"/g')""$n"
 	fi
 
+	injection+="export init=\"ESSH_FUNCTIONS='$ESSH_FUNCTIONS'"$'\n'
+	injection+="ESSH_ALIASES='$ESSH_ALIASES';"$'\n'
+	injection+="$functions$n$aliases\";"$'\n'
+	
+	injection+="if [[ \$BASH_VERSINFO -lt 4 ]]; then"$'\n'
+	injection+="echo 'execute: eval \"\$init\" (quotes are important)'"$'\n'
+	injection+="exec \$SHELL"$'\n'
+	injection+="fi"$'\n'
+	
 	if [[ $1 == "-r" ]]; then
 		injection+='exec $SHELL --rcfile '
 	elif [[ $1 == "-l" ]]; then
@@ -35,12 +44,9 @@ injection () {
 
 	injection+="<("
 	injection+=" cat ~/.bashrc;"
-	injection+=" echo;"
-	injection+=" echo \"ESSH_FUNCTIONS='$ESSH_FUNCTIONS'\";"
-	injection+=" echo \"ESSH_ALIASES='$ESSH_ALIASES'\";"
-	injection+=" echo \"$functions$n$aliases\"; "
-	#injection+=" echo \"PS1='# '\"; "
+	injection+=" echo; echo \"\$init\"; "
 	injection+=")"
+	
 	echo "$injection"
 }
 
