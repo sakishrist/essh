@@ -15,13 +15,34 @@
 # ESSH_ALIASES="chn gtree srsync wget openports"
 # ESSH_SCRIPTS=("/home/user/script.sh")
 
+__ESSH_ESCAPE () {
+  echo -n "$1" | sed 's/\\/\\\\/g;s/\$/\\$/g;s/"/\\"/g'
+}
+
+__ESSH_QUOTE () {
+  echo -n "\""
+  cat
+  echo -n "\""
+}
+
+__ESSH_ESCAPE_ARGS () {
+  local res
+
+  for i in "$@"; do
+    res+="${res:+ }"
+    res+="$(__ESSH_ESCAPE "$i" | __ESSH_QUOTE)"
+  done
+
+  echo "$res";
+}
+
+__ESSH_ESCAPE_FILES () {
+	sed 's/\\/\\\\/g;s/\$/\\$/g;s/"/\\"/g' "$@"
+}
+
 # Prepare the script to be executed on the remote system.
 injection () {
 	local injection n=$'\n' scripts functions aliases
-
-	escape () {
-		sed 's/\\/\\\\/g;s/\$/\\$/g;s/"/\\"/g' "$@"
-	}
 
 
 
@@ -40,7 +61,7 @@ injection () {
 	for script in "${ESSH_SCRIPTS[@]}"; do
 		file=${script##*/}
 		escapedFile=${file//./_}
-		scripts+="$escapedFile=\"$(escape "$script")\"$n"
+		scripts+="$escapedFile=\"$(__ESSH_ESCAPE_FILES "$script")\"$n"
 		scripts+="alias $file='bash -c \"\$$escapedFile\" $file'$n"
 		ESSH_ALIASES+=" $file"
 	done
@@ -50,9 +71,9 @@ injection () {
 	# pipe sourcing bug.
 	injection+="export init=\"ESSH_FUNCTIONS='$ESSH_FUNCTIONS'"$'\n'
 	injection+="ESSH_ALIASES='$ESSH_ALIASES';"$'\n'
-	injection+=$(escape <<< "$scripts")
-	injection+=$(escape <<< "$n$functions")
-	injection+=$(escape <<< "$n$aliases")
+	injection+=$(__ESSH_ESCAPE "$scripts")
+	injection+=$(__ESSH_ESCAPE "$n$functions")
+	injection+=$(__ESSH_ESCAPE "$n$aliases")
 	injection+="\";"$'\n'
 
 	# If the version of the remote bash has the pipe sourcing bug, tell the user to manually
