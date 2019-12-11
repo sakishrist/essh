@@ -44,7 +44,9 @@ __ESSH_ESCAPE_FILES () {
 injection () {
 	local injection n=$'\n' scripts functions aliases
 
-
+	if ! [[ $1 =~ ^-(n|l|r)$ ]]; then
+		return 1
+	fi
 
 	# Get the function definitions as they are currently known by the running bash.
 	# This means that we do not read from a file and can perform this step again
@@ -76,30 +78,33 @@ injection () {
 	injection+=$(__ESSH_ESCAPE "$n$aliases")
 	injection+="\";"$'\n'
 
-	# If the version of the remote bash has the pipe sourcing bug, tell the user to manually
-	# run the script in the $init variable and define the function on that end.
-	injection+="if [[ \$BASH_VERSINFO -lt 4 ]]; then"$'\n'
-	injection+="echo 'execute: eval \"\$init\" (quotes are important)'"$'\n'
-	injection+="exec \$SHELL"$'\n'
-	injection+="fi"$'\n'
+	if [[ $1 != "-n" ]]; then
+		# If the version of the remote bash has the pipe sourcing bug, tell the user to manually
+		# run the script in the $init variable and define the function on that end.
+		injection+="if [[ \$BASH_VERSINFO -lt 4 ]]; then"$'\n'
+		injection+="echo 'execute: eval \"\$init\" (quotes are important)'"$'\n'
+		injection+="exec \$SHELL"$'\n'
+		injection+="fi"$'\n'
 
-	# rcfile option instructs the remote bash to read the initialization script (.bashrc)
-	# from the pipe instead of from the regular location.
-	if [[ $1 == "-r" ]]; then
-		injection+='exec $SHELL --rcfile '
-	elif [[ $1 == "-l" ]]; then
-		injection+="$SHELL --rcfile "
+		# rcfile option instructs the remote bash to read the initialization script (.bashrc)
+		# from the pipe instead of from the regular location.
+		if [[ $1 == "-r" ]]; then
+			injection+='exec $SHELL --rcfile '
+		elif [[ $1 == "-l" ]]; then
+			injection+="$SHELL --rcfile "
+		fi
+
+		# Construct the pipe
+		injection+="<("
+		# Read the original bashrc
+		injection+=" cat ~/.bashrc;"
+		# Append the prepared init script
+		injection+=" echo; echo \"\$init\"; "
+		injection+=");"
 	else
-		return 1;
+		echo "$injection"
+		return 0
 	fi
-
-	# Construct the pipe
-	injection+="<("
-	# Read the original bashrc
-	injection+=" cat ~/.bashrc;"
-	# Append the prepared init script
-	injection+=" echo; echo \"\$init\"; "
-	injection+=")"
 
 	echo "$injection"
 }
