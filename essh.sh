@@ -111,9 +111,27 @@ injection () {
 
 
 essh () { #DOC: Like ssh but make available some function you have declared. Note that this will suppress the motd.
-	if [[ -n $* ]]; then
+	sgoInit '![1|2|4|6|A|a|C|f|G|g|K|k|M|N|n|q|s|T|t|V|v|X|x|Y|y]
+	         !{b|c|D|E|e|F|I|i|L|l|m|O|o|p|Q|R|S|W|w}';
+
+	sgo "$@"
+	shift $__SGO_SHIFT;
+	args=("$__SGO_IGNORE")
+  host="$1"; shift
+  cmd="$(__ESSH_ESCAPE_ARGS "$@")"
+	if [[ -n $host && $# -eq 0 ]]; then
 		# Start an ssh session and run the commands prepared by injection()
-		ssh -t "$@" "$(injection -r)"
+    if [[ -n $args ]]; then
+      ssh -t "$args" "$host" "$(injection -r)"
+    else
+      ssh -t "$host" "$(injection -r)"
+    fi
+  elif [[ -n $host && $# -gt 0 ]]; then
+    if [[ -n $args ]]; then
+      ssh "$args" "$host" "$(injection -n) $cmd"
+    else
+      ssh "$host" "$(injection -n) $cmd"
+    fi
 	else
 		# In case the user did not provide any argument, just run ssh to show the help message.
 		ssh
