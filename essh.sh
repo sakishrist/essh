@@ -41,12 +41,18 @@ __ESSH_ESCAPE_FILES () {
 }
 
 __ESSH_GET_CODE_TEXT () {
-  local scripts functions aliases
+  local scripts functions aliases esshDependencies
+
+  # Add all essh and sgo functions to the list
+  esshDependencies="essh injection __ESSH_PREAMBLE __ESSH_GET_CODE_TEXT __ESSH_ESCAPE_FILES __ESSH_ESCAPE_ARGS __ESSH_QUOTE __ESSH_ESCAPE"
+  esshDependencies+=" __SGO_PARSE_RULE __SGO_HANDLE sgoInit __SGO_DEBUG __SGO_DEBUG_END sgo"
+
+
   # Get the function definitions as they are currently known by the running bash.
   # This means that we do not read from a file and can perform this step again
   # on the remote host to transfer the functions a second time to the next hop.
   if [[ -n ${ESSH_FUNCTIONS// } ]]; then
-    functions="$(declare -f $ESSH_FUNCTIONS)""$n"
+    functions="$(declare -f $ESSH_FUNCTIONS $esshDependencies)""$n"
   fi
 
   # Get the alias definitions
