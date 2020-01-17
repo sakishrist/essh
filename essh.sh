@@ -129,8 +129,9 @@ essh () { #DOC: Like ssh but make available some function you have declared. Not
 	sgoInit '![1|2|4|6|A|a|C|f|G|g|K|k|M|N|n|q|s|T|t|V|v|X|x|Y|y]
 	         !{b|c|D|E|e|F|I|i|L|l|m|O|o|p|Q|R|S|W|w}';
 	sgo "$@"
+
 	shift $__SGO_SHIFT;
-	args=("$__SGO_IGNORE")
+	args=("$__SGO_IGNORED")
   host="$1"
   shift
   cmd="$(__ESSH_ESCAPE_ARGS "$@")"
