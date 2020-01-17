@@ -40,69 +40,78 @@ __ESSH_ESCAPE_FILES () {
 	sed 's/\\/\\\\/g;s/\$/\\$/g;s/"/\\"/g' "$@"
 }
 
+__ESSH_GET_CODE_TEXT () {
+  local scripts functions aliases
+  # Get the function definitions as they are currently known by the running bash.
+  # This means that we do not read from a file and can perform this step again
+  # on the remote host to transfer the functions a second time to the next hop.
+  if [[ -n ${ESSH_FUNCTIONS// } ]]; then
+    functions="$(declare -f $ESSH_FUNCTIONS)""$n"
+  fi
+
+  # Get the alias definitions
+  if [[ -n ${ESSH_ALIASES// } ]]; then
+    aliases="$(alias $ESSH_ALIASES)""$n"
+  fi
+
+  # for script in "${ESSH_SCRIPTS[@]}"; do
+  #   file=${script##*/}
+  #   escapedFile=${file//./_}
+  #   scripts+="$escapedFile=\"$(__ESSH_ESCAPE_FILES "$script")\"$n"
+  #   scripts+="alias $file='bash -c \"\$$escapedFile\" $file'$n"
+  #   ESSH_ALIASES+=" $file"
+  # done
+
+  echo "ESSH_FUNCTIONS='$ESSH_FUNCTIONS'"
+  echo "ESSH_ALIASES='$ESSH_ALIASES';"
+  #echo "$scripts"
+  echo "$n$functions"
+  echo "$n$aliases"
+}
+
+__ESSH_PREAMBLE () {
+  # If the version of the remote bash has the pipe sourcing bug, tell the user to manually
+  # run the script in the $init variable and define the function on that end.
+  echo "if [[ \$BASH_VERSINFO -lt 4 ]]; then"
+  echo "echo 'execute: eval \"\$init\" (quotes are important)'"
+  echo "exec \$SHELL"
+  echo "fi"
+
+  # rcfile option instructs the remote bash to read the initialization script (.bashrc)
+  # from the pipe instead of from the regular location.
+  if [[ $1 == "-r" ]]; then
+    echo -n 'exec $SHELL --rcfile '
+  elif [[ $1 == "-l" ]]; then
+    echo -n "$SHELL --rcfile "
+  fi
+
+  # Construct the pipe
+  echo -n "<("
+  # Read the original bashrc
+  echo -n " cat ~/.bashrc;"
+  # Append the prepared init script
+  echo -n " echo; echo \"\$init\"; "
+  echo ");"
+}
+
 # Prepare the script to be executed on the remote system.
 injection () {
-	local injection n=$'\n' scripts functions aliases
+	local injection n=$'\n' codeText
 
 	if ! [[ $1 =~ ^-(n|l|r)$ ]]; then
 		return 1
 	fi
 
-	# Get the function definitions as they are currently known by the running bash.
-	# This means that we do not read from a file and can perform this step again
-	# on the remote host to transfer the functions a second time to the next hop.
-	if [[ -n ${ESSH_FUNCTIONS// } ]]; then
-		functions="$(declare -f $ESSH_FUNCTIONS)""$n"
-	fi
-
-	# Get the alias definitions
-	if [[ -n ${ESSH_ALIASES// } ]]; then
-		aliases="$(alias $ESSH_ALIASES)""$n"
-	fi
-
-	for script in "${ESSH_SCRIPTS[@]}"; do
-		file=${script##*/}
-		escapedFile=${file//./_}
-		scripts+="$escapedFile=\"$(__ESSH_ESCAPE_FILES "$script")\"$n"
-		scripts+="alias $file='bash -c \"\$$escapedFile\" $file'$n"
-		ESSH_ALIASES+=" $file"
-	done
-
 	# This part tells the remote end to store the definitions of the functions in a variable
 	# This is usefull if the remote end has a bash version older than 4 and has the
 	# pipe sourcing bug.
-	injection+="export init=\"ESSH_FUNCTIONS='$ESSH_FUNCTIONS'"$'\n'
-	injection+="ESSH_ALIASES='$ESSH_ALIASES';"$'\n'
-	injection+=$(__ESSH_ESCAPE "$scripts")
-	injection+=$(__ESSH_ESCAPE "$n$functions")
-	injection+=$(__ESSH_ESCAPE "$n$aliases")
-	injection+="\";"$'\n'
+  codeText="$(__ESSH_GET_CODE_TEXT)"
 
 	if [[ $1 != "-n" ]]; then
-		# If the version of the remote bash has the pipe sourcing bug, tell the user to manually
-		# run the script in the $init variable and define the function on that end.
-		injection+="if [[ \$BASH_VERSINFO -lt 4 ]]; then"$'\n'
-		injection+="echo 'execute: eval \"\$init\" (quotes are important)'"$'\n'
-		injection+="exec \$SHELL"$'\n'
-		injection+="fi"$'\n'
-
-		# rcfile option instructs the remote bash to read the initialization script (.bashrc)
-		# from the pipe instead of from the regular location.
-		if [[ $1 == "-r" ]]; then
-			injection+='exec $SHELL --rcfile '
-		elif [[ $1 == "-l" ]]; then
-			injection+="$SHELL --rcfile "
-		fi
-
-		# Construct the pipe
-		injection+="<("
-		# Read the original bashrc
-		injection+=" cat ~/.bashrc;"
-		# Append the prepared init script
-		injection+=" echo; echo \"\$init\"; "
-		injection+=");"
+    injection+="export init=\"$(__ESSH_ESCAPE "$codeText")\";"$'\n'
+    injection+="$(__ESSH_PREAMBLE $1)"
 	else
-		echo "$injection"
+		echo "$codeText"
 		return 0
 	fi
 
@@ -113,11 +122,11 @@ injection () {
 essh () { #DOC: Like ssh but make available some function you have declared. Note that this will suppress the motd.
 	sgoInit '![1|2|4|6|A|a|C|f|G|g|K|k|M|N|n|q|s|T|t|V|v|X|x|Y|y]
 	         !{b|c|D|E|e|F|I|i|L|l|m|O|o|p|Q|R|S|W|w}';
-
 	sgo "$@"
 	shift $__SGO_SHIFT;
 	args=("$__SGO_IGNORE")
-  host="$1"; shift
+  host="$1"
+  shift
   cmd="$(__ESSH_ESCAPE_ARGS "$@")"
 	if [[ -n $host && $# -eq 0 ]]; then
 		# Start an ssh session and run the commands prepared by injection()
@@ -128,9 +137,9 @@ essh () { #DOC: Like ssh but make available some function you have declared. Not
     fi
   elif [[ -n $host && $# -gt 0 ]]; then
     if [[ -n $args ]]; then
-      ssh "$args" "$host" "$(injection -n) $cmd"
+      ssh "$args" "$host" "$(injection -n) "$'\n'"$cmd"
     else
-      ssh "$host" "$(injection -n) $cmd"
+      ssh "$host" "$(injection -n) "$'\n'"$cmd"
     fi
 	else
 		# In case the user did not provide any argument, just run ssh to show the help message.
