@@ -44,7 +44,7 @@ __ESSH_GET_CODE_TEXT () {
   local scripts functions aliases esshDependencies
 
   # Add all essh and sgo functions to the list
-  esshDependencies="essh injection __ESSH_PREAMBLE __ESSH_GET_CODE_TEXT __ESSH_ESCAPE_FILES __ESSH_ESCAPE_ARGS __ESSH_QUOTE __ESSH_ESCAPE"
+  esshDependencies="essh injection __ESSH_PREAMBLE __ESSH_GET_CODE_TEXT __ESSH_ESCAPE_FILES __ESSH_ESCAPE_ARGS __ESSH_QUOTE __ESSH_ESCAPE esudo"
   esshDependencies+=" __SGO_PARSE_RULE __SGO_HANDLE sgoInit __SGO_DEBUG __SGO_DEBUG_END sgo"
 
 
@@ -152,4 +152,24 @@ essh () { #DOC: Like ssh but make available some function you have declared. Not
 		# In case the user did not provide any argument, just run ssh to show the help message.
 		ssh
 	fi
+}
+
+esudo () {
+  sgoInit '![A<askpass|preserve-env>|b<background>|E<preserve-env>|e<edit>|H<set-home>|h<help>|i<login>|K<remove-timestamp>|k<reset-timestamp>|l<list>|n<non-interactive>|P<preserve-groups>|S<stdin>|s<shell>|V<version>|v<validate>]
+
+  !{p<prompt>|h<host>|r<role>|t<type>|U<other-user>|g<group>|T<command-timeout>|C<close-from>|u<user>}'
+
+  sgo "$@"
+
+  shift $__SGO_SHIFT;
+	args=("$__SGO_IGNORED")
+  cmd="$(__ESSH_ESCAPE_ARGS "$@")"
+
+	# local args="$(__ESSH_ESCAPE_ARGS "$@")"
+	# echo "I am going to execute this:"$'\n'"$(injection -n) "$'\n'"$cmd" > /tmp/esudo
+  if [[ -n $args ]]; then
+    sudo "$args" bash -c "$(injection -n) "$'\n'"$cmd"
+  else
+    sudo bash -c "$(injection -n) "$'\n'"$cmd"
+  fi
 }
